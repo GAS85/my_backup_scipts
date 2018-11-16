@@ -111,7 +111,7 @@ find backup*gpg -mtime +45 -exec rm {} \;
 end=`date +%s`
 
 #put collected data into logfile
-[ -s $LOCKFILE ] && cat $LOCKFILE) >> $logfile
+[ -s $LOCKFILE ] && cat $LOCKFILE >> $logfile
 
 #Email Header
 echo "To: $recipients" > $EMAILFILE
