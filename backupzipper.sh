@@ -8,6 +8,7 @@
 mysql_backup=false
 inline=false
 SavePasswordLocal=true
+mega_enable=false
 
 . /etc/backupzipper.conf
 
