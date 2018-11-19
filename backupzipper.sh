@@ -5,52 +5,63 @@
 # MySQL Backup should be done separatly, or uncommented here as option.
 # AS-IS without any warranty
 
-WORKINGDIR=/media/backup
-CACTIrraDIR=/var/lib/cacti/rra
-ATTACHDIR=/files/to/be/attached
-recipients="user1@gmail.com,user2@gmail.com,user3@gmail.com"
-subject="MySQL backup done"
-from="noreplay@nobody.net"
-megapass="xxxxxxx"
-megalogin="zzzzzzz"
+mysql_backup=false
+inline=false
+SavePasswordLocal=true
 
-#BACKUPNAME=backup-$(date +"%Y-%m-%d").gpg
-BACKUPNAME=backup-$(date +"%Y-%m-%d")_$(md5sum <<< $(ip route get 8.8.8.8 | awk '{print $NF; exit}')$(hostname) | cut -c1-5 ).gpg
-LOCKFILE=/tmp/zipping
-EMAILFILE=/tmp/zipping.email
+. /etc/backupzipper.conf
 
-#Use for MySQL backup and restore from this script
+if [ ! -f "/etc/backupzipper.conf" ]; then
+	echo "$(date) - ERROR - Config file was not found under /etc/systembackup.conf. Exiting."
+    exit 1
+else
+	if [ ! -r "/etc/backupzipper.conf" ]; then
+		echo "$(date) - ERROR - Config file could not be read."
+		exit 1
+	fi
+fi
+
+nonce=$(md5sum <<< $(ip route get 8.8.8.8 | awk '{print $NF; exit}')$(hostname) | cut -c1-5 )
+BACKUPNAME=backup-$(date +"%Y-%m-%d")_$nonce.gpg
+LOCKFILE=/tmp/zipping_$nonce
+EMAILFILE=/tmp/zipping_$nonce.email
+
 #dbuser="root"
 #dbpass="yyyy"
-
 #Check if Backup file name already taken
 if [ -f "$BACKUPNAME" ]; then
-        # Added time to Backup name
-	echo "WARNING - Backup file $BACKUPNAME exist, will take another name (add time stamp) to create backup."
+	# Added time to Backup name
+	echo "$(date) - WARNING - Backup file $BACKUPNAME exist, will take another name (add time stamp) to create backup."
 	BACKUPNAME=backup-$(date +"%Y-%m-%d_%T")_$(md5sum <<< $(ip route get 8.8.8.8 | awk '{print $NF; exit}')$(hostname) | cut -c1-5 ).gpg
 fi
-ToFind="$(echo $BACKUPNAME | cut -c1-6)*$(md5sum <<< $(ip route get 8.8.8.8 | awk '{print $NF; exit}')$(hostname) | cut -c1-5 ).gpg"
 
+#ToFind="$(echo $BACKUPNAME | cut -c1-6)*$(md5sum <<< $(ip route get 8.8.8.8 | awk '{print $NF; exit}')$(hostname) | cut -c1-5 ).gpg"
 #ToFind="$(echo $BACKUPNAME | cut -c1-6)*$(echo $BACKUPNAME | sed 's/.*\(...\)/\1/')"
 
-[ -f "$LOCKFILE" ] && exit
+if [ -f "$LOCKFILE" ]; then
+	# Remove lock file if script fails last time and did not run longer than 2 days due to lock file.
+	find "$LOCKFILE" -mtime +2 -type f -delete
+	echo "$(date) - Warning - process is running"
+	exit 1
+fi
 
 #Check if Working dir exist
 if [ ! -d "$WORKINGDIR" ]; then
-	echo "Directory $WORKINGDIR does not exist"
-    exit 1
+	echo "$(date) - ERROR - Directory $WORKINGDIR does not exist"
+	exit 1
 fi
-
-#if [ ! -d "$WORKINGDIR/tmp" ]; then
-#	mkdir $WORKINGDIR/tmp
-#fi
 
 touch $LOCKFILE
 touch $EMAILFILE
 
-#MySQL all DB backup and gzip if needed
-#mysqldump --all-databases --single-transaction -u $dbuser -p$dbpass > $WORKINGDIR/tmp/all_databases.sql
-#mysqldump –all-databases | tar -czvf > $WORKINGDIR/backup-$(date +"%Y-%m-%d").sql.tgz
+# Put output to Logfile and Errors to Lockfile as per https://stackoverflow.com/questions/18460186/writing-outputs-to-log-file-and-console
+exec 3>&1 1>>${LOCKFILE} 2>>${LOCKFILE}
+
+if [ "$mysql_backup" == true ]; then
+	#MySQL all DB backup and gzip if needed
+	mysqldump --all-databases --single-transaction -u $dbuser -p$dbpass > $WORKINGDIR/tmp/all_databases.sql
+	#mysqldump –all-databases | tar -czvf > $WORKINGDIR/backup-$(date +"%Y-%m-%d").sql.tgz
+fi
 
 #To Restore any DB
 #mysql -u root -p
@@ -60,7 +71,7 @@ touch $EMAILFILE
 #exit
 #mysql -u [username] -p[password] [db_name] < nextcloud-sqlbkp.bak
 
-#Random password 48 is a password lenght 
+#Random password
 pass="$(gpg --armor --gen-random 1 48)"
 
 #Cacti Backup -- http://lifein0and1.com/2008/05/15/migrating-cacti-from-one-server-to-another/
@@ -74,8 +85,11 @@ do
 done
 
 #tar -cvf $WORKINGDIR/tmp/rrd.tar *.rrd.xml
-tar -czvf $WORKINGDIR/rrd.tgz *.rrd.xml
+tar -czf $WORKINGDIR/rrd.tgz *.rrd.xml
 rm *.rrd.xml
+
+#put cacti pictures
+tar -czf $WORKINGDIR/cacti_graphs.tgz $ATTACHDIR/*.png
 
 #end Cacti backup
 
@@ -87,25 +101,27 @@ rm *.rrd.xml
 cd $WORKINGDIR
 
 #GPG with password from above
-tar -czv *gz | gpg --passphrase "$pass" --symmetric --no-tty -o $BACKUPNAME
-#tar -czv tmp/* | gpg --passphrase "$pass" --symmetric --no-tty -o $BACKUPNAME
+tar -cz *gz | gpg --passphrase "$pass" --symmetric --no-tty -o $BACKUPNAME
 
 #Upload to Mega
 #megaput --no-progress --path /Root/Backup $BACKUPNAME >>$LOCKFILE
 #megaput -u $megalogin -p $megapass --no-progress --path /Root/Backup $BACKUPNAME 2>>$LOCKFILE
 #megaput -u $megalogin -p $megapass --path /Root/Backup $BACKUPNAME 2>>$LOCKFILE
-upload_command="megaput -u $megalogin -p $megapass --path /Root/Backup $BACKUPNAME"
 
-NEXT_WAIT_TIME=10
-until $upload_command || [ $NEXT_WAIT_TIME -eq 4 ]; do
-   sleep $(( NEXT_WAIT_TIME++ ))
-   #echo "$(date) - ERROR - Mega Upload was failed, will retry after 10 seconds ($BACKUPNAME)." >> $logfile
-done
+if [ "$mega_enable" = true ]; then
+	upload_command="megaput -u $megalogin -p $megapass --path /Root/Backup $BACKUPNAME"
+
+	NEXT_WAIT_TIME=10
+	until $upload_command || [ $NEXT_WAIT_TIME -eq 4 ]; do
+		sleep $(( NEXT_WAIT_TIME++ ))
+		echo "$(date) - ERROR - Mega Upload was failed, will retry after 10 seconds ($BACKUPNAME)."
+	done
+fi
 
 #delete local old backups
 # +15 is older than 15 days
-find "$ToFind" -mtime +15 -exec rm {} \; 2>>$LOCKFILE
-#find backup*gpg -mtime +15 -exec rm {} \;
+#find "$ToFind" -mtime +15 -exec rm {} \; 2>>$LOCKFILE
+find backup*gpg -mtime +15 -exec rm {} \; 2>>$LOCKFILE
 
 #Email Header
 echo "To: $recipients" > $EMAILFILE
@@ -124,7 +140,7 @@ echo "<br>">> $EMAILFILE
 echo "Backup size: $(du -h $BACKUPNAME | awk '{printf "%s",$1}').<br>" >> $EMAILFILE
 echo "MD5 of Backup file: $(md5sum $BACKUPNAME | awk '{printf "%s",$1}' | tr 'a-z' 'A-Z').<br>" >> $EMAILFILE
 echo "Space information: $(megadf -u $megalogin -p $megapass -h).<br>" >> $EMAILFILE
-[ -s file.name ] && echo "Other info: $(cat $LOCKFILE).<br>" >> $EMAILFILE
+[ -s "$LOCKFILE" ] && echo "Other info: $(cat $LOCKFILE).<br>" >> $EMAILFILE
 echo "" >> $EMAILFILE
 
 #
@@ -159,24 +175,48 @@ echo "" >> $EMAILFILE
 #echo "Content-ID: <$(basename $ATTACH1)>"
 #echo '---q1w2e3r4t5--'
 
-for entry in "$ATTACHDIR"/graph_*_1.png
-do
-	export ATTACH=$entry
-    echo '---q1w2e3r4t5' >> $EMAILFILE
-	echo 'Content-Type: image/png; name='$(basename $ATTACH)'' >> $EMAILFILE
-	echo "Content-Transfer-Encoding: base64" >> $EMAILFILE
-	echo 'Content-Disposition: inline; filename='$(basename $ATTACH)'' >> $EMAILFILE
-	echo "Content-ID: <$(basename $ATTACH)>" >> $EMAILFILE
-	echo '---q1w2e3r4t5--' >> $EMAILFILE
-	base64 $ATTACH >> $EMAILFILE
-done
+if [ "$inline" == true ]; then
+
+	for entry in "$ATTACHDIR"/graph_*_1.png
+	do
+		export ATTACH=$entry
+		echo '---q1w2e3r4t5'
+		echo 'Content-Type: image/png; name='$(basename $ATTACH)''
+		echo "Content-Transfer-Encoding: uuencode"
+		echo "Content-Transfer-Encoding: base64"
+		echo 'Content-Disposition: inline; filename='$(basename $ATTACH)''
+		echo "Content-ID: <$(basename $ATTACH)>"
+		echo '---q1w2e3r4t5--'
+		base64 $ATTACH
+		uuencode $ATTACH $(basename $ATTACH)
+	done
+
+else
+
+	for entry in "$ATTACHDIR"/graph_*_1.png
+	do
+		export ATTACH=$entry
+		echo '<img src="'$(basename $ATTACH)'" alt="''" />' >> $EMAILFILE
+		echo '---q1w2e3r4t5' >> $EMAILFILE
+		echo 'Content-Type: image/png; name='$(basename $ATTACH)'' >> $EMAILFILE
+		echo "Content-Transfer-Encoding: base64" >> $EMAILFILE
+		echo 'Content-Disposition: inline; filename='$(basename $ATTACH)'' >> $EMAILFILE
+		echo "Content-ID: <$(basename $ATTACH)>" >> $EMAILFILE
+		echo '' >> $EMAILFILE
+		base64 $ATTACH >> $EMAILFILE
+	done
+fi
 
 #send email with password and attachments
-cat $EMAILFILE | /usr/sbin/sendmail $recipients
+$Sendmail $recipients < $EMAILFILE
 
 #remove temporary files
-#rm $WORKINGDIR/tmp/*
 rm $LOCKFILE
 rm $EMAILFILE
+
+# Opt: save password locally if Email fails, or you do not want to send it.
+if [ "$SavePasswordLocal" == true ]; then
+	echo "$(date) - The backup ($BACKUPNAME) was created with password: $pass - MD5 of backup file: $(md5sum $BACKUPNAME | awk '{printf "%s",$1}' | tr 'a-z' 'A-Z')" >> $WORKINGDIR/passes.txt
+fi
 
 exit 0
