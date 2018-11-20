@@ -120,14 +120,18 @@ fi
 #find "$ToFind" -mtime +15 -exec rm {} \; 2>>$LOCKFILE
 find backup*gpg -mtime +15 -exec rm {} \; 2>>$LOCKFILE
 
+boundary="$(gpg --armor --gen-random 1 15)"
+#${boundary}
+
 #Email Header
 echo "To: $recipients" > $EMAILFILE
 echo "FROM: $from" >> $EMAILFILE
 echo "Subject: $subject" >> $EMAILFILE
 echo "MIME-Version: 1.0" >> $EMAILFILE
-echo 'Content-Type: multipart/mixed; boundary="-q1w2e3r4t5"' >> $EMAILFILE
+#echo 'Content-Type: multipart/mixed; boundary="-q1w2e3r4t5"' >> $EMAILFILE
+echo 'Content-Type: multipart/mixed; boundary="-'$boundary'"' >> $EMAILFILE
 echo >> $EMAILFILE
-echo '---q1w2e3r4t5' >> $EMAILFILE
+echo '---'$boundary >> $EMAILFILE
 echo "Content-Type: text/html" >> $EMAILFILE
 echo "Content-Disposition: inline" >> $EMAILFILE
 echo "" >> $EMAILFILE
@@ -177,13 +181,13 @@ if [ "$inline" == true ]; then
 	for entry in "$ATTACHDIR"/graph_*_1.png
 	do
 		export ATTACH=$entry
-		echo '---q1w2e3r4t5'
+		echo '---'$boundary
 		echo 'Content-Type: image/png; name='$(basename $ATTACH)''
 		echo "Content-Transfer-Encoding: uuencode"
 		echo "Content-Transfer-Encoding: base64"
 		echo 'Content-Disposition: inline; filename='$(basename $ATTACH)''
 		echo "Content-ID: <$(basename $ATTACH)>"
-		echo '---q1w2e3r4t5--'
+		echo '---'$boundary'--'
 		base64 $ATTACH
 		uuencode $ATTACH $(basename $ATTACH)
 	done
@@ -194,7 +198,7 @@ else
 	do
 		export ATTACH=$entry
 		echo '<img src="'$(basename $ATTACH)'" alt="''" />' >> $EMAILFILE
-		echo '---q1w2e3r4t5' >> $EMAILFILE
+		echo '---'$boundary >> $EMAILFILE
 		echo 'Content-Type: image/png; name='$(basename $ATTACH)'' >> $EMAILFILE
 		echo "Content-Transfer-Encoding: base64" >> $EMAILFILE
 		echo 'Content-Disposition: attachment; filename='$(basename $ATTACH)'' >> $EMAILFILE
