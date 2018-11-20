@@ -27,17 +27,12 @@ BACKUPNAME=backup-$(date +"%Y-%m-%d")_$nonce.gpg
 LOCKFILE=/tmp/zipping_$nonce
 EMAILFILE=/tmp/zipping_$nonce.email
 
-#dbuser="root"
-#dbpass="yyyy"
 #Check if Backup file name already taken
 if [ -f "$BACKUPNAME" ]; then
 	# Added time to Backup name
 	echo "$(date) - WARNING - Backup file $BACKUPNAME exist, will take another name (add time stamp) to create backup."
 	BACKUPNAME=backup-$(date +"%Y-%m-%d_%T")_$(md5sum <<< $(ip route get 8.8.8.8 | awk '{print $NF; exit}')$(hostname) | cut -c1-5 ).gpg
 fi
-
-#ToFind="$(echo $BACKUPNAME | cut -c1-6)*$(md5sum <<< $(ip route get 8.8.8.8 | awk '{print $NF; exit}')$(hostname) | cut -c1-5 ).gpg"
-#ToFind="$(echo $BACKUPNAME | cut -c1-6)*$(echo $BACKUPNAME | sed 's/.*\(...\)/\1/')"
 
 if [ -f "$LOCKFILE" ]; then
 	# Remove lock file if script fails last time and did not run longer than 2 days due to lock file.
@@ -57,6 +52,7 @@ touch $EMAILFILE
 
 # Put output to Logfile and Errors to Lockfile as per https://stackoverflow.com/questions/18460186/writing-outputs-to-log-file-and-console
 exec 3>&1 1>>${LOCKFILE} 2>>${LOCKFILE}
+#exec 3>&1 1>>"/dev/null" 2>>${LOCKFILE}
 
 if [ "$mysql_backup" == true ]; then
 	#MySQL all DB backup and gzip if needed
@@ -110,7 +106,7 @@ tar -cz *gz | gpg --passphrase "$pass" --symmetric --no-tty -o $BACKUPNAME
 #megaput -u $megalogin -p $megapass --path /Root/Backup $BACKUPNAME 2>>$LOCKFILE
 
 if [ "$mega_enable" = true ]; then
-	upload_command="megaput -u $megalogin -p $megapass --path /Root/Backup $BACKUPNAME"
+	upload_command="megaput -u $megalogin -p $megapass --no-progress --path /Root/Backup $BACKUPNAME"
 
 	NEXT_WAIT_TIME=10
 	until $upload_command || [ $NEXT_WAIT_TIME -eq 4 ]; do
@@ -201,7 +197,7 @@ else
 		echo '---q1w2e3r4t5' >> $EMAILFILE
 		echo 'Content-Type: image/png; name='$(basename $ATTACH)'' >> $EMAILFILE
 		echo "Content-Transfer-Encoding: base64" >> $EMAILFILE
-		echo 'Content-Disposition: inline; filename='$(basename $ATTACH)'' >> $EMAILFILE
+		echo 'Content-Disposition: attachment; filename='$(basename $ATTACH)'' >> $EMAILFILE
 		echo "Content-ID: <$(basename $ATTACH)>" >> $EMAILFILE
 		echo '' >> $EMAILFILE
 		base64 $ATTACH >> $EMAILFILE
