@@ -95,7 +95,7 @@ fi
 middle=`date +%s`
 
 #Upload backup to Mega
-upload_command="megaput -u $megalogin -p $megapass --path /Root/Backup $BACKUPNAME"
+upload_command="megaput -u $megalogin -p $megapass --no-progress --path /Root/Backup $BACKUPNAME"
 
 NEXT_WAIT_TIME=10
 until $upload_command || [ $NEXT_WAIT_TIME -eq 4 ]; do
@@ -114,24 +114,23 @@ end=`date +%s`
 [ -s $LOCKFILE ] && cat $LOCKFILE >> $logfile
 
 #Email Header
-echo "To: $recipients" > $EMAILFILE
-echo "FROM: $from" >> $EMAILFILE
-echo "Subject: $subject" >> $EMAILFILE
-echo "MIME-Version: 1.0" >> $EMAILFILE
-echo 'Content-Type: multipart/mixed; boundary="-q1w2e3r4t5"' >> $EMAILFILE
-echo >> $EMAILFILE
-echo '---q1w2e3r4t5' >> $EMAILFILE
-echo "Content-Type: text/html" >> $EMAILFILE
-echo "Content-Disposition: inline" >> $EMAILFILE
-echo "" >> $EMAILFILE
-echo 'The backup was created with password: '"'$pass'"'<br>' >> $EMAILFILE
-echo "It took `expr $middle - $start`s to create and `expr $end - $middle`s to upload backup file, or `expr $end - $start`s at all.<br>" >> $EMAILFILE
-echo "Have a nice day and check some statistic.<br>">> $EMAILFILE
-echo "<br>">> $EMAILFILE
-echo "Backup size: $(du -h $BACKUPNAME | awk '{printf "%s",$1}').<br>" >> $EMAILFILE
-echo "SHA256 of backup file: $sha.<br>" >> $EMAILFILE
-echo "<br>">> $EMAILFILE
-echo "Space information: $(megadf -u $megalogin -p $megapass -h).<br>" >> $EMAILFILE
+echo 'To: '$recipients'
+FROM: '$from'
+Subject: '$subject'
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="-q1w2e3r4t5"
+
+---q1w2e3r4t5
+Content-Type: text/html
+Content-Disposition: inline
+
+The backup was created with password: '"'$pass'"'<br>
+It took 'expr $middle - $start's to create and 'expr $end - $middle's to upload backup file, or 'expr $end - $start's at all.<br>
+Have a nice day and check some statistic.<br>
+<br>
+Backup size: '$(du -h $BACKUPNAME | awk '{printf "%s",$1}')'.<br>
+SHA256 of backup file: '$sha'.<br><br>
+Space information: '$(megadf -u $megalogin -p $megapass -h)'.<br>' > $EMAILFILE
 [ -s "$LOCKFILE" ] && echo "Other info: $(cat $LOCKFILE).<br>" >> $EMAILFILE
 #echo "<br>">> $EMAILFILE
 
@@ -146,4 +145,3 @@ rm $LOCKFILE
 rm $EMAILFILE
 
 exit 0
-
