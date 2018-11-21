@@ -59,7 +59,7 @@ exec 3>&1 1>>${logfile} 2>>${LOCKFILE}
 
 #Check if Backup file name already taken
 if [ -f "$BACKUPNAME" ]; then
-        # Added time to Backup name
+	# Added time to Backup name
 	echo "$(date) - WARNING - Backup file $BACKUPNAME exist, will take another name to create backup." | tee /dev/fd/3
 	BACKUPNAME=backup-$(date +"%Y-%m-%d_%T")_$nonce$extension
 fi
@@ -99,13 +99,12 @@ upload_command="megaput -u $megalogin -p $megapass --no-progress --path /Root/Ba
 
 NEXT_WAIT_TIME=10
 until $upload_command || [ $NEXT_WAIT_TIME -eq 4 ]; do
-   sleep $(( NEXT_WAIT_TIME++ ))
-   echo "$(date) - ERROR - Mega Upload was failed, will retry after 10 seconds ($BACKUPNAME)."
+	sleep $(( NEXT_WAIT_TIME++ ))
+	echo "$(date) - ERROR - Mega Upload was failed, will retry after 10 seconds ($BACKUPNAME)."
 done
 
 #delete local old backups
 # +45 is older than 45 days - basically any other backup.
-#find "$ToFind" -mtime +45 -exec rm {} \; 2>>$LOCKFILE
 find backup*gpg -mtime +45 -exec rm {} \;
 
 end=`date +%s`
@@ -124,10 +123,9 @@ Content-Type: multipart/mixed; boundary="-q1w2e3r4t5"
 Content-Type: text/html
 Content-Disposition: inline
 
-The backup was created with password: '"'$pass'"'<br>
-It took 'expr $middle - $start's to create and 'expr $end - $middle's to upload backup file, or 'expr $end - $start's at all.<br>
-Have a nice day and check some statistic.<br>
-<br>
+The backup was created with password: "'$pass'"<br>
+It took '`expr $middle - $start`'s to create and '`expr $end - $middle`'s to upload backup file, or '`expr $end - $start`'s at all.<br>
+Have a nice day and check some statistic.<br><br>
 Backup size: '$(du -h $BACKUPNAME | awk '{printf "%s",$1}')'.<br>
 SHA256 of backup file: '$sha'.<br><br>
 Space information: '$(megadf -u $megalogin -p $megapass -h)'.<br>' > $EMAILFILE
