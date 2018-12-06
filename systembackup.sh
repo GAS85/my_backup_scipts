@@ -129,9 +129,11 @@ FROM: '$from'
 Subject: '$subject'
 MIME-Version: 1.0
 Content-Type: multipart/mixed; boundary="-q1w2e3r4t5"
+
 ---q1w2e3r4t5
 Content-Type: text/html
 Content-Disposition: inline
+
 The backup was created with password: "'$pass'"<br>
 It took '`expr $middle - $start`'s to create and '`expr $end - $middle`'s to upload backup file, or '`expr $end - $start`'s at all.<br>
 Have a nice day and check some statistic.<br><br>
