@@ -95,13 +95,24 @@ fi
 middle=`date +%s`
 
 #Upload backup to Mega
-upload_command="megaput -u $megalogin -p $megapass --no-progress --path /Root/Backup $BACKUPNAME"
+if [ "$mega_enabled" == true ]; then
+	upload_command="megaput -u $megalogin -p $megapass --no-progress --path /Root/Backup $BACKUPNAME"
 
-NEXT_WAIT_TIME=10
-until $upload_command || [ $NEXT_WAIT_TIME -eq 4 ]; do
-	sleep $(( NEXT_WAIT_TIME++ ))
-	echo "$(date) - ERROR - Mega Upload was failed, will retry after 10 seconds ($BACKUPNAME)."
-done
+	NEXT_WAIT_TIME=10
+	until $upload_command || [ $NEXT_WAIT_TIME -eq 4 ]; do
+		sleep $(( NEXT_WAIT_TIME++ ))
+		echo "$(date) - ERROR - Mega Upload was failed, will retry after 10 seconds ($BACKUPNAME)."
+	done
+fi
+
+if [ "$dav_enabled" == true ]; then
+	#curl -T filetoput.xml http://www.url.com/filetoput.xml
+	if [ -z "$dav_user" ]; then
+		curl -T $BACKUPNAME -u $dav_user:$dav_pass $dav_link/$BACKUPNAME
+	else
+		curl -T $BACKUPNAME $dav_link/$BACKUPNAME
+	fi
+fi
 
 #delete local old backups
 # +45 is older than 45 days - basically any other backup.
@@ -118,11 +129,9 @@ FROM: '$from'
 Subject: '$subject'
 MIME-Version: 1.0
 Content-Type: multipart/mixed; boundary="-q1w2e3r4t5"
-
 ---q1w2e3r4t5
 Content-Type: text/html
 Content-Disposition: inline
-
 The backup was created with password: "'$pass'"<br>
 It took '`expr $middle - $start`'s to create and '`expr $end - $middle`'s to upload backup file, or '`expr $end - $start`'s at all.<br>
 Have a nice day and check some statistic.<br><br>
