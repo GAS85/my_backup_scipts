@@ -1,13 +1,16 @@
 #!/bin/bash
 
+# By Georgiy Sitnikov.
+#
+# Will do NC backup and upload to remote server via SSH with key authentication
+#
+# AS-IS without any warranty
+
 SSHIdentityFile=/path/to/file/.ssh/id_rsa
 SSHUser=user
-WhereToMount=/mnt/remoteSystem
-
 RemoteAddr=IP_or_host
 RemoteBackupFolder=/path/to/backup
-
-NexctCloudPath=/var/www/nextcloud/
+NextCloudPath=/var/www/nextcloud/
 
 # Folder and files to be excluded from backup.
 # - data/updater* exclude updater backups and dowloads 
@@ -27,22 +30,17 @@ excludeFromBackup="--exclude=data/updater*\
 
 #########
 
-if [ ! -d $WhereToMount ]; then
-  mkdir -p $WhereToMount;
-fi
+# Check if config.php exist
+[[ -e $NextCloudPath/config/config.php ]] || { echo >&2 "Error - сonfig.php could not be found under "$NextCloudPath"/config/config.php. Please check the path"; exit 1; }
 
-echo Mount remote system
-sshfs -o allow_other,default_permissions,IdentityFile=$SSHIdentityFile $SSHUser@RemoteAddr:RemoteBackupFolder $WhereToMount
+# Fetch data directory place from the config file
+DataDirectory=$(grep datadirectory $NextCloudPath/config/config.php | cut -d "'" -f4)
 
-echo Run Rsync without Preview, updater and transfer parts.
-rsync -aP --no-o --no-g --delete $excludeFromBackup $NexctCloudPath $WhereToMount/nextcloud/
+echo Run Rsync of NC root folder.
+rsync -aP --no-o --no-g --delete --exclude=data --exclude=$DataDirectory -e "ssh -i $SSHIdentityFile" $NextCloudPath $SSHUser@$RemoteAddr:$RemoteBackupFolder/nextcloud/
 
-#rsync -aP --no-o --no-g --delete NexctCloudPath $WhereToMount/nextcloud/
+echo Run Rsync of NC Data folder.
+rsync -aP --no-o --no-g --delete $excludeFromBackup -e "ssh -i $SSHIdentityFile" $NextCloudPath $SSHUser@$RemoteAddr:$RemoteBackupFolder/nextcloud/
 
-echo Wait to finish sync
-sleep 20
-
-echo Unmount at the end
-umount $WhereToMount
-
+echo Ready.
 exit 0
