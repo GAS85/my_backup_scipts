@@ -65,17 +65,26 @@ if [ "$CompressToArchive" == true ]; then
 
 	sleep 2
 
-	echo Mount remote Archive
-	archivemount $WhereToMount/$RemoteArchiveName $WhereToMount_$(date)
+	if [ -f "$WhereToMount/$RemoteArchiveName" ]; then
 
-	echo Rsync of NC into Archive
-	rsync $RsyncOptions $excludeFromBackup $NextCloudPath $WhereToMount_$(date)
+		echo Mount remote Archive
+		archivemount $WhereToMount/$RemoteArchiveName $WhereToMount_$(date)
 
-	echo Wait to finish sync
-	sleep 5
+		echo Rsync of NC into Archive
+		rsync $RsyncOptions $excludeFromBackup $NextCloudPath $WhereToMount_$(date)
 
-	echo Unmount Archive
-	umount $WhereToMount_$(date)
+		echo Wait to finish sync
+		sleep 5
+
+		echo Unmount Archive
+		umount $WhereToMount_$(date)
+
+	else
+
+		echo Put NC into Archive
+		tar -cvpf $excludeFromBackup --one-file-system $NextCloudPath $WhereToMount/nextcloudBackup-$(date +"%Y-%m-%d_%T")_$(md5sum <<< $(ip route get 8.8.8.8 | awk '{print $NF; exit}')$(hostname) | cut -c1-5 ).tar.gz
+
+	fi
 
 	echo Wait to finish sync
 	sleep 5
