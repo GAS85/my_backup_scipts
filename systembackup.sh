@@ -9,7 +9,7 @@
 nonce=$(md5sum <<< $(ip route get 8.8.8.8 | awk '{print $NF; exit}')$(hostname) | cut -c1-5 )
 
 # Please do not use root folder
-WORKINGDIR=/home/backup
+WORKINGDIR=/var/backups
 
 # Other settings
 logfile=/var/log/backup_$nonce.log
@@ -94,24 +94,24 @@ if [ "$SavePasswordLocal" == true ]; then
 fi
 middle=`date +%s`
 
-#Upload backup to Mega
-if [ "$mega_enabled" == true ]; then
+if [ "$mega_enable" = true ]; then
 	upload_command="megaput -u $megalogin -p $megapass --no-progress --path /Root/Backup $BACKUPNAME"
 
 	NEXT_WAIT_TIME=10
-	until $upload_command || [ $NEXT_WAIT_TIME -eq 4 ]; do
+	until $upload_command || [ $NEXT_WAIT_TIME -eq 14 ]; do
 		sleep $(( NEXT_WAIT_TIME++ ))
 		echo "$(date) - ERROR - Mega Upload was failed, will retry after 10 seconds ($BACKUPNAME)."
 	done
 fi
 
-if [ "$dav_enabled" == true ]; then
-	#curl -T filetoput.xml http://www.url.com/filetoput.xml
-	if [ -z "$dav_user" ]; then
-		curl -T $BACKUPNAME -u $dav_user:$dav_pass $dav_link/$BACKUPNAME
-	else
-		curl -T $BACKUPNAME $dav_link/$BACKUPNAME
-	fi
+if [ "$webdav_enable" = true ]; then
+	upload_command="curl --user "$webdavlogin:$webdavpass" -T $WORKINGDIR/$BACKUPNAME $WEBDAV/$BACKUPNAME"
+
+	NEXT_WAIT_TIME=10
+	until $upload_command || [ $NEXT_WAIT_TIME -eq 14 ]; do
+		sleep $(( NEXT_WAIT_TIME++ ))
+		echo "$(date) - ERROR - Webdav Upload was failed, will retry after 10 seconds ($BACKUPNAME)."
+	done
 fi
 
 #delete local old backups
