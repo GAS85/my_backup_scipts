@@ -9,12 +9,13 @@ mysql_backup=false
 inline=false
 SavePasswordLocal=true
 mega_enable=false
+webdav_enable=false
 
 . /etc/backupzipper.conf
 
 if [ ! -f "/etc/backupzipper.conf" ]; then
 	echo "$(date) - ERROR - Config file was not found under /etc/systembackup.conf. Exiting."
-    exit 1
+	exit 1
 else
 	if [ ! -r "/etc/backupzipper.conf" ]; then
 		echo "$(date) - ERROR - Config file could not be read."
@@ -26,13 +27,6 @@ nonce=$(md5sum <<< $(ip route get 8.8.8.8 | awk '{print $NF; exit}')$(hostname) 
 BACKUPNAME=backup-$(date +"%Y-%m-%d")_$nonce.gpg
 LOCKFILE=/tmp/zipping_$nonce
 EMAILFILE=/tmp/zipping_$nonce.email
-
-#Check if Backup file name already taken
-if [ -f "$BACKUPNAME" ]; then
-	# Added time to Backup name
-	echo "$(date) - WARNING - Backup file $BACKUPNAME exist, will take another name (add time stamp) to create backup."
-	BACKUPNAME=backup-$(date +"%Y-%m-%d_%T")_$(md5sum <<< $(ip route get 8.8.8.8 | awk '{print $NF; exit}')$(hostname) | cut -c1-5 ).gpg
-fi
 
 if [ -f "$LOCKFILE" ]; then
 	# Remove lock file if script fails last time and did not run longer than 2 days due to lock file.
@@ -47,11 +41,18 @@ if [ ! -d "$WORKINGDIR" ]; then
 	exit 1
 fi
 
+#Check if Backup file name already taken
+if [ -f "$WORKINGDIR/$BACKUPNAME" ]; then
+        # Added time to Backup name
+	echo "$(date) - WARNING - Backup file $BACKUPNAME exist, will take another name (add time stamp) to create backup."
+	BACKUPNAME=backup-$(date +"%Y-%m-%d_%T")_$(md5sum <<< $(ip route get 8.8.8.8 | awk '{print $NF; exit}')$(hostname) | cut -c1-5 ).gpg
+fi
+
 touch $LOCKFILE
 touch $EMAILFILE
 
 # Put output to Logfile and Errors to Lockfile as per https://stackoverflow.com/questions/18460186/writing-outputs-to-log-file-and-console
-exec 3>&1 1>>${LOCKFILE} 2>>${LOCKFILE}
+#exec 3>&1 1>>${LOCKFILE} 2>>${LOCKFILE}
 #exec 3>&1 1>>"/dev/null" 2>>${LOCKFILE}
 
 if [ "$mysql_backup" == true ]; then
@@ -98,7 +99,14 @@ tar -czf $WORKINGDIR/cacti_graphs.tgz $ATTACHDIR/*.png
 cd $WORKINGDIR
 
 #GPG with password from above
-tar -cz *gz | gpg --passphrase "$pass" --symmetric --no-tty -o $BACKUPNAME
+#tar -cz *gz | gpg --passphrase "$pass" --symmetric -o $BACKUPNAME
+if [ "gpg --version | head -n 1 | cut -c 13" = 1 ]; then
+	#	GPG 1
+	tar -cz *gz | gpg --passphrase "$pass" --symmetric --no-tty -o $BACKUPNAME
+else
+	#	GPG 2
+	tar -cz *gz | gpg --pinentry-mode loopback --passphrase "$pass" --symmetric --no-tty -o $BACKUPNAME
+fi
 
 #Upload to Mega
 #megaput --no-progress --path /Root/Backup $BACKUPNAME >>$LOCKFILE
@@ -109,11 +117,22 @@ if [ "$mega_enable" = true ]; then
 	upload_command="megaput -u $megalogin -p $megapass --no-progress --path /Root/Backup $BACKUPNAME"
 
 	NEXT_WAIT_TIME=10
-	until $upload_command || [ $NEXT_WAIT_TIME -eq 4 ]; do
+	until $upload_command || [ $NEXT_WAIT_TIME -eq 14 ]; do
 		sleep $(( NEXT_WAIT_TIME++ ))
 		echo "$(date) - ERROR - Mega Upload was failed, will retry after 10 seconds ($BACKUPNAME)."
 	done
 fi
+
+if [ "$webdav_enable" = true ]; then
+	upload_command="curl --user "$webdavlogin:$webdavpass" -T $WORKINGDIR/$BACKUPNAME $WEBDAV/$BACKUPNAME"
+
+	NEXT_WAIT_TIME=10
+	until $upload_command || [ $NEXT_WAIT_TIME -eq 14 ]; do
+		sleep $(( NEXT_WAIT_TIME++ ))
+		echo "$(date) - ERROR - Webdav Upload was failed, will retry after 10 seconds ($BACKUPNAME)."
+	done
+fi
+
 
 #delete local old backups
 # +15 is older than 15 days
